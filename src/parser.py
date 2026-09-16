@@ -6,6 +6,10 @@
 
 from __future__ import annotations
 
+QUOTE_CHARS = ("'", '"')
+SEPARATOR_CHARS = (" ", "\t")
+ESCAPE_CHAR = "\\"
+
 
 class ParseError(ValueError):
     """Ошибка разбора командной строки."""
@@ -13,12 +17,55 @@ class ParseError(ValueError):
 
 def _is_quote(char: str) -> bool:
     """Проверяет, является ли символ кавычкой."""
-    return char in ("'", '"')
+    return char in QUOTE_CHARS
 
 
 def _is_separator(char: str) -> bool:
     """Проверяет, является ли символ разделителем аргументов."""
-    return char in (" ", "\t")
+    return char in SEPARATOR_CHARS
+
+
+def _consume_inside_quote(
+    char: str, quote: str, escaped: bool
+) -> tuple[str | None, bool, str | None]:
+    """Обрабатывает символ внутри кавычек.
+
+    Returns:
+        Кортеж (новый_quote, escaped, символ_для_добавления).
+        Если символ не нужно добавлять — третьим элементом None.
+    """
+    if escaped:
+        return quote, False, char
+
+    if char == ESCAPE_CHAR:
+        return quote, True, None
+
+    if char == quote:
+        return None, False, None
+
+    return quote, False, char
+
+
+def _consume_outside_quote(char: str) -> tuple[bool, str | None]:
+    """Обрабатывает символ вне кавычек.
+
+    Returns:
+        Кортеж (начинается_ли_кавычка, символ_для_добавления).
+    """
+    if _is_quote(char):
+        return True, None
+
+    if _is_separator(char):
+        return False, None
+
+    return False, char
+
+
+def _flush(tokens: list[str], current: list[str]) -> None:
+    """Добавляет накопленный токен в список, если он не пуст."""
+    if current:
+        tokens.append("".join(current))
+        current.clear()
 
 
 def _tokenize(line: str) -> list[str]:
@@ -39,31 +86,24 @@ def _tokenize(line: str) -> list[str]:
     escaped = False
 
     for char in line:
-        if escaped:
-            current.append(char)
-            escaped = False
-        elif char == "\\" and quote is not None:
-            escaped = True
-        elif quote is not None:
-            if char == quote:
-                quote = None
-            else:
-                current.append(char)
-        elif _is_quote(char):
-            quote = char
-        elif _is_separator(char):
-            if current:
-                tokens.append("".join(current))
-                current = []
+        if quote is not None:
+            quote, escaped, addition = _consume_inside_quote(
+                char, quote, escaped
+            )
         else:
-            current.append(char)
+            starts_quote, addition = _consume_outside_quote(char)
+            if starts_quote:
+                quote = char
+            elif addition is None:
+                _flush(tokens, current)
+
+        if addition is not None:
+            current.append(addition)
 
     if quote is not None:
         raise ParseError(f"Незакрытая кавычка: {quote}")
 
-    if current:
-        tokens.append("".join(current))
-
+    _flush(tokens, current)
     return tokens
 
 
@@ -73,7 +113,7 @@ def parse_command(line: str) -> tuple[str, list[str]]:
     Поддерживает:
     - разделение по пробелам и табам;
     - аргументы в одинарных и двойных кавычках;
-    - экранирование кавычек внутри строки с помощью обратного слэша.
+    - экранирование кавычек обратным слэшем внутри кавычек.
 
     Args:
         line: строка ввода пользователя.

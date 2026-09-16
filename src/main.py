@@ -12,22 +12,30 @@ from tkinter import ttk
 
 from parser import ParseError, parse_command
 
+WINDOW_TITLE_TEMPLATE = "Эмулятор - [{user}@{host}]"
+WINDOW_GEOMETRY = "800x500"
+TEXT_FONT = ("Consolas", 11)
+TEXT_BG = "black"
+TEXT_FG = "#00ff00"
+PROMPT_SYMBOL = ">"
+EXIT_MESSAGE = "Эмулятор запущен. Введите 'exit' для выхода."
+
+
 class ShellEmulator:
     """Графический эмулятор командной оболочки."""
 
-    WINDOW_TITLE_TEMPLATE = "Эмулятор - [{user}@{host}]"
-
     def __init__(self) -> None:
+        """Создаёт окно и виджеты эмулятора."""
         self.root = tk.Tk()
         self.root.title(self._build_title())
-        self.root.geometry("800x500")
+        self.root.geometry(WINDOW_GEOMETRY)
         self._build_ui()
 
     def _build_title(self) -> str:
         """Формирует заголовок окна из данных ОС."""
         user = getpass.getuser()
         host = socket.gethostname()
-        return self.WINDOW_TITLE_TEMPLATE.format(user=user, host=host)
+        return WINDOW_TITLE_TEMPLATE.format(user=user, host=host)
 
     def _build_ui(self) -> None:
         """Создаёт виджеты окна."""
@@ -35,21 +43,20 @@ class ShellEmulator:
             self.root,
             wrap="word",
             state="disabled",
-            bg="black",
-            fg="#00ff00",
-            font=("Consolas", 11),
+            bg=TEXT_BG,
+            fg=TEXT_FG,
+            font=TEXT_FONT,
         )
         self.output.pack(fill="both", expand=True, padx=4, pady=(4, 0))
 
         frame = ttk.Frame(self.root)
         frame.pack(fill="x", padx=4, pady=4)
 
-        ttk.Label(frame, text=">").pack(side="left")
+        ttk.Label(frame, text=PROMPT_SYMBOL).pack(side="left")
         self.entry = ttk.Entry(frame)
         self.entry.pack(side="left", fill="x", expand=True, padx=(4, 0))
         self.entry.bind("<Return>", self._on_enter)
         self.entry.focus_set()
-
 
     def _print(self, text: str) -> None:
         """Печатает текст в окно вывода."""
@@ -59,12 +66,11 @@ class ShellEmulator:
         self.output.configure(state="disabled")
 
     def _on_enter(self, _event: tk.Event) -> None:
-        """Обработчик нажатия Enter в поле ввода."""
+        """Обрабатывает нажатие Enter в поле ввода."""
         line = self.entry.get()
         self.entry.delete(0, "end")
-        self._print(f"> {line}")
+        self._print(f"{PROMPT_SYMBOL} {line}")
         self._execute(line)
-
 
     def _execute(self, line: str) -> None:
         """Разбирает строку и выполняет команду."""
@@ -77,12 +83,21 @@ class ShellEmulator:
             self._print(f"Ошибка разбора: {error}")
             return
 
-        handler = self.COMMANDS.get(command)
+        handler = self._get_handler(command)
         if handler is None:
             self._print(f"{command}: команда не найдена")
             return
 
-        handler(self, args)
+        handler(args)
+
+    def _get_handler(self, command: str):
+        """Возвращает метод-обработчик команды или None."""
+        handlers = {
+            "ls": self._cmd_ls,
+            "cd": self._cmd_cd,
+            "exit": self._cmd_exit,
+        }
+        return handlers.get(command)
 
     def _cmd_ls(self, args: list[str]) -> None:
         """Заглушка команды ls."""
@@ -96,16 +111,9 @@ class ShellEmulator:
         """Закрывает приложение."""
         self.root.destroy()
 
-    COMMANDS = {
-        "ls": _cmd_ls,
-        "cd": _cmd_cd,
-        "exit": _cmd_exit,
-    }
-
-
     def run(self) -> None:
         """Запускает главный цикл Tkinter."""
-        self._print("Эмулятор запущен. Введите 'exit' для выхода.")
+        self._print(EXIT_MESSAGE)
         self.root.mainloop()
 
 
