@@ -1,31 +1,40 @@
 """Эмулятор командной оболочки UNIX с GUI на Tkinter.
 
-Этап 1: REPL — минимальный прототип.
+Этап 2: добавлена конфигурация через командную строку
+и выполнение стартового скрипта.
 """
 
 from __future__ import annotations
 
 import getpass
 import socket
+import sys
 import tkinter as tk
 from tkinter import ttk
 
-from parser import ParseError, parse_command
+from src.config import Config, format_config, parse_config
+from src.parser import ParseError, parse_command
+from src.startup import StartupScriptError, run_startup_script
 
 WINDOW_TITLE_TEMPLATE = "Эмулятор - [{user}@{host}]"
 WINDOW_GEOMETRY = "800x500"
 TEXT_FONT = ("Consolas", 11)
 TEXT_BG = "black"
 TEXT_FG = "#00ff00"
-PROMPT_SYMBOL = ">"
+PROMPT_SYMBOL = "> "
 EXIT_MESSAGE = "Эмулятор запущен. Введите 'exit' для выхода."
 
 
 class ShellEmulator:
     """Графический эмулятор командной оболочки."""
 
-    def __init__(self) -> None:
-        """Создаёт окно и виджеты эмулятора."""
+    def __init__(self, config: Config) -> None:
+        """Создаёт окно, виджеты и применяет конфигурацию.
+
+        Args:
+            config: параметры запуска эмулятора.
+        """
+        self.config = config
         self.root = tk.Tk()
         self.root.title(self._build_title())
         self.root.geometry(WINDOW_GEOMETRY)
@@ -52,7 +61,7 @@ class ShellEmulator:
         frame = ttk.Frame(self.root)
         frame.pack(fill="x", padx=4, pady=4)
 
-        ttk.Label(frame, text=PROMPT_SYMBOL).pack(side="left")
+        ttk.Label(frame, text=self.config.prompt).pack(side="left")
         self.entry = ttk.Entry(frame)
         self.entry.pack(side="left", fill="x", expand=True, padx=(4, 0))
         self.entry.bind("<Return>", self._on_enter)
@@ -69,10 +78,10 @@ class ShellEmulator:
         """Обрабатывает нажатие Enter в поле ввода."""
         line = self.entry.get()
         self.entry.delete(0, "end")
-        self._print(f"{PROMPT_SYMBOL} {line}")
-        self._execute(line)
+        self._print(f"{self.config.prompt}{line}")
+        self.execute(line)
 
-    def _execute(self, line: str) -> None:
+    def execute(self, line: str) -> None:
         """Разбирает строку и выполняет команду."""
         if not line.strip():
             return
@@ -111,16 +120,37 @@ class ShellEmulator:
         """Закрывает приложение."""
         self.root.destroy()
 
+    def run_startup(self) -> None:
+        """Выполняет стартовый скрипт, если он задан."""
+        if not self.config.startup_script:
+            return
+
+        try:
+            run_startup_script(
+                self.config.startup_script,
+                execute=self.execute,
+                echo=self._print,
+            )
+        except StartupScriptError as error:
+            self._print(f"Ошибка стартового скрипта: {error}")
+
     def run(self) -> None:
         """Запускает главный цикл Tkinter."""
+        self._print(format_config(self.config))
         self._print(EXIT_MESSAGE)
+        self.run_startup()
         self.root.mainloop()
 
 
-def main() -> None:
-    """Точка входа."""
-    ShellEmulator().run()
+def main(argv: list[str] | None = None) -> None:
+    """Точка входа.
+
+    Args:
+        argv: аргументы командной строки; None означает sys.argv[1:].
+    """
+    config = parse_config(argv)
+    ShellEmulator(config).run()
 
 
 if __name__ == "__main__":
-    main()
+    main(sys.argv[1:])
