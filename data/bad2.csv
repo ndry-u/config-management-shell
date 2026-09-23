@@ -1,0 +1,3 @@
+path,type,content,mode,owner
+/,dir,,755,root
+/bad,unknown,,644,user

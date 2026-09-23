@@ -1,0 +1,8 @@
+path,type,content,mode,owner
+/,dir,,755,root
+/home,dir,,755,root
+/home/user,dir,,755,user
+/home/user/readme.txt,file,"Привет, мир",644,user
+/home/user/notes.txt,file,"Строка 1
+Строка 2",644,user
+/tmp,dir,,1777,root

@@ -1,7 +1,7 @@
 """Эмулятор командной оболочки UNIX с GUI на Tkinter.
 
-Этап 2: добавлена конфигурация через командную строку
-и выполнение стартового скрипта.
+Этап 3: добавлена загрузка виртуальной файловой системы (VFS)
+из CSV-файла в память.
 """
 
 from __future__ import annotations
@@ -15,6 +15,8 @@ from tkinter import ttk
 from src.config import Config, format_config, parse_config
 from src.parser import ParseError, parse_command
 from src.startup import StartupScriptError, run_startup_script
+from src.vfs import Vfs
+from src.vfs_loader import VfsLoadError, load_vfs
 
 WINDOW_TITLE_TEMPLATE = "Эмулятор - [{user}@{host}]"
 WINDOW_GEOMETRY = "800x500"
@@ -37,6 +39,7 @@ class ShellEmulator:
             config: параметры запуска эмулятора.
         """
         self.config = config
+        self.vfs: Vfs | None = None
         self.root = tk.Tk()
         self.root.title(self._build_title())
         self.root.geometry(WINDOW_GEOMETRY)
@@ -122,6 +125,18 @@ class ShellEmulator:
         """Закрывает приложение."""
         self.root.destroy()
 
+    def load_vfs(self) -> None:
+        """Загружает VFS из файла, указанного в конфигурации."""
+        if not self.config.vfs_path:
+            self._print("VFS не указан, работа без файловой системы")
+            return
+
+        try:
+            self.vfs = load_vfs(self.config.vfs_path)
+            self._print(f"VFS загружена: {self.vfs.name}")
+        except VfsLoadError as error:
+            self._print(f"Ошибка загрузки VFS: {error}")
+
     def run_startup(self) -> None:
         """Выполняет стартовый скрипт, если он задан."""
         if not self.config.startup_script:
@@ -140,6 +155,7 @@ class ShellEmulator:
     def run(self) -> None:
         """Запускает главный цикл Tkinter."""
         self._print(format_config(self.config))
+        self.load_vfs()
         self._print(EXIT_MESSAGE)
         self.run_startup()
         self.root.mainloop()

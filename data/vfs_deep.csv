@@ -1,0 +1,10 @@
+path,type,content,mode,owner
+/,dir,,755,root
+/home,dir,,755,root
+/home/user,dir,,755,user
+/home/user/docs,dir,,755,user
+/home/user/docs/work,dir,,755,user
+/home/user/docs/work/report.txt,file,"Годовой отчёт",644,user
+/home/user/docs/work/plan.txt,file,"План на квартал",644,user
+/home/user/data.bin,file,base64:SGVsbG8gd29ybGQ=,644,user
+/tmp,dir,,1777,root
