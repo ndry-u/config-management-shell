@@ -21,8 +21,10 @@ WINDOW_GEOMETRY = "800x500"
 TEXT_FONT = ("Consolas", 11)
 TEXT_BG = "black"
 TEXT_FG = "#00ff00"
-PROMPT_SYMBOL = "> "
 EXIT_MESSAGE = "Эмулятор запущен. Введите 'exit' для выхода."
+PAD_X = 4
+PAD_Y = 4
+ENTRY_PAD_X = (4, 0)
 
 
 class ShellEmulator:
@@ -56,14 +58,14 @@ class ShellEmulator:
             fg=TEXT_FG,
             font=TEXT_FONT,
         )
-        self.output.pack(fill="both", expand=True, padx=4, pady=(4, 0))
+        self.output.pack(fill="both", expand=True, padx=PAD_X, pady=(PAD_Y, 0))
 
         frame = ttk.Frame(self.root)
-        frame.pack(fill="x", padx=4, pady=4)
+        frame.pack(fill="x", padx=PAD_X, pady=PAD_Y)
 
         ttk.Label(frame, text=self.config.prompt).pack(side="left")
         self.entry = ttk.Entry(frame)
-        self.entry.pack(side="left", fill="x", expand=True, padx=(4, 0))
+        self.entry.pack(side="left", fill="x", expand=True, padx=ENTRY_PAD_X)
         self.entry.bind("<Return>", self._on_enter)
         self.entry.focus_set()
 
@@ -130,6 +132,7 @@ class ShellEmulator:
                 self.config.startup_script,
                 execute=self.execute,
                 echo=self._print,
+                prompt=self.config.prompt,
             )
         except StartupScriptError as error:
             self._print(f"Ошибка стартового скрипта: {error}")

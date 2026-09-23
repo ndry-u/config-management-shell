@@ -6,7 +6,7 @@ from collections.abc import Callable
 from pathlib import Path
 
 COMMENT_PREFIXES = ("#",)
-PROMPT_ECHO = "> "
+DEFAULT_PROMPT = "> "
 
 
 class StartupScriptError(Exception):
@@ -29,6 +29,7 @@ def run_startup_script(
     path: str,
     execute: Callable[[str], None],
     echo: Callable[[str], None],
+    prompt: str = DEFAULT_PROMPT,
 ) -> None:
     """Выполняет стартовый скрипт строка за строкой.
 
@@ -39,6 +40,7 @@ def run_startup_script(
         path: путь к файлу скрипта.
         execute: функция выполнения одной строки как команды.
         echo: функция вывода строки в окно вывода.
+        prompt: приглашение к вводу, отображаемое перед каждой командой.
 
     Raises:
         StartupScriptError: если файл не найден.
@@ -57,5 +59,5 @@ def run_startup_script(
         if not command:
             continue
 
-        echo(f"{PROMPT_ECHO}{command}")
+        echo(f"{prompt}{command}")
         execute(command)
