@@ -7,24 +7,18 @@ VFS хранится в памяти в виде дерева узлов. Каж
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from enum import Enum
 
 DEFAULT_MODE = "644"
 DEFAULT_DIR_MODE = "755"
 DEFAULT_OWNER = "user"
 PATH_SEPARATOR = "/"
 ROOT_NAME = "/"
+NODE_TYPE_FILE = "file"
+NODE_TYPE_DIR = "dir"
 
 
 class VfsError(Exception):
     """Ошибка работы с VFS."""
-
-
-class NodeType(Enum):
-    """Тип узла VFS."""
-
-    FILE = "file"
-    DIR = "dir"
 
 
 @dataclass
@@ -33,7 +27,7 @@ class VfsNode:
 
     Attributes:
         name: имя узла (без слешей).
-        node_type: FILE или DIR.
+        node_type: 'file' или 'dir'.
         content: текстовое содержимое (для файлов).
         mode: права доступа в виде строки, например '644'.
         owner: владелец файла или каталога.
@@ -41,7 +35,7 @@ class VfsNode:
     """
 
     name: str
-    node_type: NodeType
+    node_type: str
     content: str = ""
     mode: str = DEFAULT_MODE
     owner: str = DEFAULT_OWNER
@@ -50,12 +44,12 @@ class VfsNode:
     @property
     def is_dir(self) -> bool:
         """Является ли узел каталогом."""
-        return self.node_type is NodeType.DIR
+        return self.node_type == NODE_TYPE_DIR
 
     @property
     def is_file(self) -> bool:
         """Является ли узел файлом."""
-        return self.node_type is NodeType.FILE
+        return self.node_type == NODE_TYPE_FILE
 
 
 class Vfs:
@@ -68,7 +62,7 @@ class Vfs:
             name: имя VFS.
         """
         self.name = name
-        self.root = VfsNode(ROOT_NAME, NodeType.DIR, mode=DEFAULT_DIR_MODE)
+        self.root = VfsNode(ROOT_NAME, NODE_TYPE_DIR, mode=DEFAULT_DIR_MODE)
 
     def normalize(self, path: str) -> str:
         """Приводит путь к абсолютному виду.
@@ -154,7 +148,7 @@ class Vfs:
         for part in parts:
             existing = node.children.get(part)
             if existing is None:
-                existing = VfsNode(part, NodeType.DIR, mode=DEFAULT_DIR_MODE)
+                existing = VfsNode(part, NODE_TYPE_DIR, mode=DEFAULT_DIR_MODE)
                 node.children[part] = existing
             elif not existing.is_dir:
                 raise VfsError(f"Не каталог: {part}")

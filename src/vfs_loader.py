@@ -7,46 +7,69 @@ import binascii
 import csv
 from pathlib import Path
 
-from src.vfs import Vfs, VfsError, VfsNode, NodeType
+from src.vfs import (
+    NODE_TYPE_DIR,
+    NODE_TYPE_FILE,
+    Vfs,
+    VfsError,
+    VfsNode,
+)
 
 BASE64_PREFIX = "base64:"
 REQUIRED_COLUMNS = ("path", "type")
-VALID_TYPES = ("file", "dir")
-MIN_COLUMNS = 2
+VALID_TYPES = (NODE_TYPE_FILE, NODE_TYPE_DIR)
+DEFAULT_FILE_MODE = "644"
+DEFAULT_OWNER = "user"
 
 
 class VfsLoadError(Exception):
     """Ошибка загрузки VFS из файла."""
 
 
-def _decode_content(raw: str) -> str:
-    """Декодирует содержимое файла из base64, если есть префикс.
+def _decode_base64(encoded: str, line_no: int) -> str:
+    """Декодирует base64-строку в текст.
+
+    Args:
+        encoded: закодированная строка без префикса.
+        line_no: номер строки CSV для сообщения об ошибке.
+
+    Returns:
+        Декодированный текст.
+
+    Raises:
+        VfsLoadError: если base64 повреждён.
+    """
+    try:
+        decoded = base64.b64decode(encoded, validate=True)
+    except (binascii.Error, ValueError) as error:
+        raise VfsLoadError(
+            f"Строка {line_no}: ошибка base64: {error}"
+        ) from error
+    return decoded.decode("utf-8", errors="replace")
+
+
+def _decode_content(raw: str, line_no: int) -> str:
+    """Декодирует содержимое с поддержкой base64.
 
     Args:
         raw: исходная строка содержимого из CSV.
+        line_no: номер строки для сообщения об ошибке.
 
     Returns:
-        Декодированная строка или исходная, если префикса нет.
-
-    Raises:
-        VfsLoadError: если base64-строка повреждена.
+        Декодированная строка или исходная.
     """
     if not raw.startswith(BASE64_PREFIX):
         return raw
-
     encoded = raw[len(BASE64_PREFIX):]
-    try:
-        decoded_bytes = base64.b64decode(encoded, validate=True)
-        return decoded_bytes.decode("utf-8", errors="replace")
-    except (binascii.Error, ValueError) as error:
-        raise VfsLoadError(f"Ошибка декодирования base64: {error}") from error
+    return _decode_base64(encoded, line_no)
 
 
-def _parse_row(row: dict[str, str]) -> tuple[str, VfsNode]:
+def _parse_row(row: dict[str, str], line_no: int) -> tuple[str, VfsNode]:
     """Преобразует строку CSV в путь и узел VFS.
 
     Args:
         row: словарь с колонками path, type, content, mode, owner.
+        line_no: номер строки для сообщения об ошибке.
 
     Returns:
         Кортеж (путь, узел).
@@ -55,17 +78,22 @@ def _parse_row(row: dict[str, str]) -> tuple[str, VfsNode]:
         VfsLoadError: если строка некорректна.
     """
     path = row.get("path", "").strip()
-    node_type_str = row.get("type", "").strip().lower()
+    node_type = row.get("type", "").strip().lower()
 
     if not path:
-        raise VfsLoadError("Пустая колонка path")
-    if node_type_str not in VALID_TYPES:
-        raise VfsLoadError(f"Неверный тип узла: {node_type_str!r}")
+        raise VfsLoadError(f"Строка {line_no}: пустая колонка path")
+    if node_type not in VALID_TYPES:
+        raise VfsLoadError(
+            f"Строка {line_no}: неверный тип узла: {node_type!r}"
+        )
 
-    node_type = NodeType(node_type_str)
-    content = _decode_content(row.get("content", "")) if node_type is NodeType.FILE else ""
-    mode = row.get("mode", "").strip() or "644"
-    owner = row.get("owner", "").strip() or "user"
+    raw_content = row.get("content", "")
+    content = ""
+    if node_type == NODE_TYPE_FILE:
+        content = _decode_content(raw_content, line_no)
+
+    mode = row.get("mode", "").strip() or DEFAULT_FILE_MODE
+    owner = row.get("owner", "").strip() or DEFAULT_OWNER
     name = path.rstrip("/").split("/")[-1] or "/"
 
     node = VfsNode(
@@ -76,6 +104,45 @@ def _parse_row(row: dict[str, str]) -> tuple[str, VfsNode]:
         owner=owner,
     )
     return path, node
+
+
+def _check_columns(fieldnames: list[str] | None) -> None:
+    """Проверяет обязательные колонки CSV.
+
+    Args:
+        fieldnames: список колонок из CSV.
+
+    Raises:
+        VfsLoadError: если колонок нет или не хватает обязательных.
+    """
+    if fieldnames is None:
+        raise VfsLoadError("Пустой CSV-файл")
+
+    missing = [c for c in REQUIRED_COLUMNS if c not in fieldnames]
+    if missing:
+        raise VfsLoadError(f"Отсутствуют колонки: {missing}")
+
+
+def _add_row(vfs: Vfs, row: dict[str, str], line_no: int) -> None:
+    """Добавляет одну строку CSV в VFS.
+
+    Args:
+        vfs: целевая VFS.
+        row: словарь с колонками CSV.
+        line_no: номер строки для сообщения об ошибке.
+
+    Raises:
+        VfsLoadError: если строка некорректна.
+    """
+    node_path, node = _parse_row(row, line_no)
+
+    if node_path == "/":
+        return
+
+    try:
+        vfs.add_node(node_path, node)
+    except VfsError as error:
+        raise VfsLoadError(f"Строка {line_no}: {error}") from error
 
 
 def load_vfs(path: str, name: str | None = None) -> Vfs:
@@ -103,30 +170,9 @@ def load_vfs(path: str, name: str | None = None) -> Vfs:
 
     with csv_path.open("r", encoding="utf-8", newline="") as stream:
         reader = csv.DictReader(stream)
+        _check_columns(reader.fieldnames)
 
-        if reader.fieldnames is None:
-            raise VfsLoadError("Пустой CSV-файл")
-
-        missing = [c for c in REQUIRED_COLUMNS if c not in reader.fieldnames]
-        if missing:
-            raise VfsLoadError(f"Отсутствуют колонки: {missing}")
-
-        for row_number, row in enumerate(reader, start=2):
-            try:
-                node_path, node = _parse_row(row)
-            except VfsLoadError as error:
-                raise VfsLoadError(
-                    f"Строка {row_number}: {error}"
-                ) from error
-
-            if node_path == "/":
-                continue
-
-            try:
-                vfs.add_node(node_path, node)
-            except VfsError as error:
-                raise VfsLoadError(
-                    f"Строка {row_number}: {error}"
-                ) from error
+        for line_no, row in enumerate(reader, start=2):
+            _add_row(vfs, row, line_no)
 
     return vfs
