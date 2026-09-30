@@ -1,0 +1,5 @@
+path,type,content,mode,owner
+/,dir,,755,root
+/home,dir,,755,root
+/home/user,dir,,755,user
+/home/user/dupes.txt,file,base64:YXBwbGUKYmFuYW5hCmFwcGxlCmNoZXJyeQpiYW5hbmEKZGF0ZQo=,644,user

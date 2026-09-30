@@ -4,7 +4,7 @@ path,type,content,mode,owner
 /home/user,dir,,755,user
 /home/user/docs,dir,,755,user
 /home/user/docs/work,dir,,755,user
-/home/user/docs/work/report.txt,file,"Годовой отчёт",644,user
-/home/user/docs/work/plan.txt,file,"План на квартал",644,user
+/home/user/docs/work/report.txt,file,base64:0JPQvtC00L7QstC+0Lkg0L7RgtGH0ZHRgg==,644,user
+/home/user/docs/work/plan.txt,file,base64:0J/Qu9Cw0L0g0L3QsCDQutCy0LDRgNGC0LDQuw==,644,user
 /home/user/data.bin,file,base64:SGVsbG8gd29ybGQ=,644,user
 /tmp,dir,,1777,root
