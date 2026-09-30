@@ -1,7 +1,6 @@
 """Эмулятор командной оболочки UNIX с GUI на Tkinter.
 
-Этап 3: добавлена загрузка виртуальной файловой системы (VFS)
-из CSV-файла в память.
+Этап 4: реализованы команды ls, cd, uniq, tree, wc.
 """
 
 from __future__ import annotations
@@ -12,6 +11,13 @@ import sys
 import tkinter as tk
 from tkinter import ttk
 
+from src.commands import (
+    cmd_cd,
+    cmd_ls,
+    cmd_tree,
+    cmd_uniq,
+    cmd_wc,
+)
 from src.config import Config, format_config, parse_config
 from src.parser import ParseError, parse_command
 from src.startup import StartupScriptError, run_startup_script
@@ -24,6 +30,9 @@ TEXT_FONT = ("Consolas", 11)
 TEXT_BG = "black"
 TEXT_FG = "#00ff00"
 EXIT_MESSAGE = "Эмулятор запущен. Введите 'exit' для выхода."
+NO_VFS_MESSAGE = "VFS не указан, работа без файловой системы"
+VFS_REQUIRED = "Команда требует загруженной VFS"
+ROOT_PATH = "/"
 PAD_X = 4
 PAD_Y = 4
 ENTRY_PAD_X = (4, 0)
@@ -40,6 +49,7 @@ class ShellEmulator:
         """
         self.config = config
         self.vfs: Vfs | None = None
+        self.cwd = ROOT_PATH
         self.root = tk.Tk()
         self.root.title(self._build_title())
         self.root.geometry(WINDOW_GEOMETRY)
@@ -66,11 +76,21 @@ class ShellEmulator:
         frame = ttk.Frame(self.root)
         frame.pack(fill="x", padx=PAD_X, pady=PAD_Y)
 
-        ttk.Label(frame, text=self.config.prompt).pack(side="left")
+        self.prompt_label = ttk.Label(frame, text=self._prompt_text())
+        self.prompt_label.pack(side="left")
+
         self.entry = ttk.Entry(frame)
         self.entry.pack(side="left", fill="x", expand=True, padx=ENTRY_PAD_X)
         self.entry.bind("<Return>", self._on_enter)
         self.entry.focus_set()
+
+    def _prompt_text(self) -> str:
+        """Возвращает приглашение с текущим путём."""
+        return f"{self.config.prompt}{self.cwd}$ "
+
+    def _refresh_prompt(self) -> None:
+        """Обновляет приглашение после смены каталога."""
+        self.prompt_label.configure(text=self._prompt_text())
 
     def _print(self, text: str) -> None:
         """Печатает текст в окно вывода."""
@@ -79,11 +99,16 @@ class ShellEmulator:
         self.output.see("end")
         self.output.configure(state="disabled")
 
+    def _print_lines(self, lines: list[str]) -> None:
+        """Печатает список строк."""
+        for line in lines:
+            self._print(line)
+
     def _on_enter(self, _event: tk.Event) -> None:
         """Обрабатывает нажатие Enter в поле ввода."""
         line = self.entry.get()
         self.entry.delete(0, "end")
-        self._print(f"{self.config.prompt}{line}")
+        self._print(f"{self._prompt_text()}{line}")
         self.execute(line)
 
     def execute(self, line: str) -> None:
@@ -97,43 +122,54 @@ class ShellEmulator:
             self._print(f"Ошибка разбора: {error}")
             return
 
+        if command == "exit":
+            self.root.destroy()
+            return
+
+        self._dispatch(command, args)
+
+    def _dispatch(self, command: str, args: list[str]) -> None:
+        """Выполняет команду по имени."""
         handler = self._get_handler(command)
         if handler is None:
             self._print(f"{command}: команда не найдена")
             return
 
-        handler(args)
+        if self.vfs is None and command != "exit":
+            self._print(VFS_REQUIRED)
+            return
+
+        result = handler(self.vfs, self.cwd, args)
+        if isinstance(result, tuple):
+            new_cwd, lines = result
+            self.cwd = new_cwd
+            self._print_lines(lines)
+            self._refresh_prompt()
+        else:
+            self._print_lines(result)
 
     def _get_handler(self, command: str):
-        """Возвращает метод-обработчик команды или None."""
+        """Возвращает функцию-обработчик команды или None."""
         handlers = {
-            "ls": self._cmd_ls,
-            "cd": self._cmd_cd,
-            "exit": self._cmd_exit,
+            "ls": cmd_ls,
+            "cd": cmd_cd,
+            "uniq": cmd_uniq,
+            "wc": cmd_wc,
+            "tree": cmd_tree,
         }
         return handlers.get(command)
-
-    def _cmd_ls(self, args: list[str]) -> None:
-        """Заглушка команды ls."""
-        self._print(f"ls: аргументы = {args}")
-
-    def _cmd_cd(self, args: list[str]) -> None:
-        """Заглушка команды cd."""
-        self._print(f"cd: аргументы = {args}")
-
-    def _cmd_exit(self, args: list[str]) -> None:
-        """Закрывает приложение."""
-        self.root.destroy()
 
     def load_vfs(self) -> None:
         """Загружает VFS из файла, указанного в конфигурации."""
         if not self.config.vfs_path:
-            self._print("VFS не указан, работа без файловой системы")
+            self._print(NO_VFS_MESSAGE)
             return
 
         try:
             self.vfs = load_vfs(self.config.vfs_path)
             self._print(f"VFS загружена: {self.vfs.name}")
+            self.cwd = ROOT_PATH
+            self._refresh_prompt()
         except VfsLoadError as error:
             self._print(f"Ошибка загрузки VFS: {error}")
 

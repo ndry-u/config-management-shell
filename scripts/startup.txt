@@ -1,15 +1,20 @@
-# Стартовый скрипт для тестирования Этапа 2.
-# Комментарии начинаются с #.
+# Стартовый скрипт для тестирования всех команд Этапа 4.
 
 ls
-ls -la /tmp
-cd "My Documents"
-cd 'Program Files'
+ls /
+ls /home
+ls /home/user
 
-# Неизвестная команда должна быть пропущена, выполнение не прерывается.
-abcd
+cd /home/user
+ls
 
-# Ошибочная строка — незакрытая кавычка; тоже пропускается.
-echo "unterminated
+wc /home/user/readme.txt
+uniq /home/user/readme.txt
 
+cd /home/user/docs/work
+ls
+tree /home/user
+tree /
+
+cd /
 ls
