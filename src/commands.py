@@ -10,7 +10,12 @@ PATH_SEPARATOR = "/"
 ROOT_PATH = "/"
 PARENT_DIR = ".."
 CURRENT_DIR = "."
+HIDDEN_PREFIX = "."
 SIZE_UNIT_DIVIDER = 1024
+LS_FLAG_ALL = "a"
+LS_FLAG_LONG = "l"
+LS_FLAG_HUMAN = "h"
+LS_FLAGS_ALLOWED = (LS_FLAG_ALL, LS_FLAG_LONG, LS_FLAG_HUMAN)
 
 
 def _format_size(size: int) -> str:
@@ -31,17 +36,93 @@ def _format_size(size: int) -> str:
     return f"{mb:.1f} MB"
 
 
+def _node_name(node: VfsNode) -> str:
+    """Возвращает имя узла с суффиксом-слешем для каталогов."""
+    suffix = PATH_SEPARATOR if node.is_dir else ""
+    return f"{node.name}{suffix}"
+
+
 def _node_label(node: VfsNode) -> str:
-    """Формирует строку для вывода узла в ls.
+    """Формирует длинную строку для вывода узла.
 
     Args:
         node: узел VFS.
 
     Returns:
-        Строка с именем, правами и владельцем.
+        Строка с правами, владельцем, размером и именем.
     """
-    suffix = PATH_SEPARATOR if node.is_dir else ""
-    return f"{node.mode} {node.owner:>8} {node.name}{suffix}"
+    size = len(node.content) if node.is_file else 0
+    return (
+        f"{node.mode} {node.owner:>8} {size:>6} {_node_name(node)}"
+    )
+
+
+def _node_label_human(node: VfsNode) -> str:
+    """Длинная строка с человекочитаемым размером."""
+    raw_size = len(node.content) if node.is_file else 0
+    size = _format_size(raw_size)
+    return (
+        f"{node.mode} {node.owner:>8} {size:>7} {_node_name(node)}"
+    )
+
+
+def _parse_ls_args(args: list[str]) -> tuple[set[str], list[str]]:
+    """Разделяет аргументы ls на флаги и пути.
+
+    Args:
+        args: аргументы команды.
+
+    Returns:
+        Кортеж (множество_флагов, список_путей).
+    """
+    flags: set[str] = set()
+    paths: list[str] = []
+    for arg in args:
+        if arg.startswith("-") and arg != "-":
+            for char in arg[1:]:
+                if char in LS_FLAGS_ALLOWED:
+                    flags.add(char)
+        else:
+            paths.append(arg)
+    return flags, paths
+
+
+def _format_ls_line(
+    node: VfsNode,
+    flags: set[str],
+) -> str:
+    """Формирует строку вывода ls по флагам.
+
+    Args:
+        node: узел VFS.
+        flags: множество активных флагов.
+
+    Returns:
+        Строка для вывода.
+    """
+    if LS_FLAG_LONG not in flags:
+        return _node_name(node)
+    if LS_FLAG_HUMAN in flags:
+        return _node_label_human(node)
+    return _node_label(node)
+
+
+def _filter_children(
+    children: list[VfsNode],
+    flags: set[str],
+) -> list[VfsNode]:
+    """Убирает скрытые узлы, если флаг -a не задан.
+
+    Args:
+        children: список дочерних узлов.
+        flags: множество активных флагов.
+
+    Returns:
+        Отфильтрованный список.
+    """
+    if LS_FLAG_ALL in flags:
+        return children
+    return [n for n in children if not n.name.startswith(HIDDEN_PREFIX)]
 
 
 def resolve_path(current: str, target: str) -> str:
@@ -76,6 +157,11 @@ def resolve_path(current: str, target: str) -> str:
 def cmd_ls(vfs: Vfs, cwd: str, args: list[str]) -> list[str]:
     """Выводит содержимое каталога.
 
+    Поддерживает флаги:
+    - `-a` — показать скрытые файлы;
+    - `-l` — длинный формат (права, владелец, размер);
+    - `-h` — человекочитаемый размер (с `-l`).
+
     Args:
         vfs: виртуальная файловая система.
         cwd: текущий каталог.
@@ -84,18 +170,20 @@ def cmd_ls(vfs: Vfs, cwd: str, args: list[str]) -> list[str]:
     Returns:
         Список строк для вывода.
     """
-    target = args[0] if args else cwd
+    flags, paths = _parse_ls_args(args)
+    target = paths[0] if paths else cwd
     path = resolve_path(cwd, target)
+
     try:
         node = vfs.find(path)
         if node is None:
             return [f"ls: путь не найден: {target}"]
         if node.is_file:
-            return [_node_label(node)]
-        children = vfs.list_dir(path)
+            return [_format_ls_line(node, flags)]
+        children = _filter_children(vfs.list_dir(path), flags)
         if not children:
             return []
-        return [_node_label(child) for child in children]
+        return [_format_ls_line(child, flags) for child in children]
     except VfsError as error:
         return [f"ls: {error}"]
 
