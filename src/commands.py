@@ -23,6 +23,7 @@ LS_FLAG_HUMAN = "h"
 LS_FLAGS_ALLOWED = (LS_FLAG_ALL, LS_FLAG_LONG, LS_FLAG_HUMAN)
 CHMOD_MIN_LEN = 3
 CHMOD_MAX_LEN = 4
+CHMOD_MIN_ARGS = 2
 
 
 def _format_size(size: int) -> str:
@@ -408,7 +409,7 @@ def cmd_chmod(vfs: Vfs, cwd: str, args: list[str]) -> list[str]:
     Returns:
         Пустой список при успехе или сообщение об ошибке.
     """
-    if len(args) < 2:
+    if len(args) < CHMOD_MIN_ARGS :
         return ["chmod: укажите права и путь"]
 
     mode, target = args[0], args[1]
