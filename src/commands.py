@@ -4,7 +4,12 @@ from __future__ import annotations
 
 from collections.abc import Callable
 
-from src.vfs import Vfs, VfsError, VfsNode
+from src.vfs import (
+    NODE_TYPE_DIR,
+    Vfs,
+    VfsError,
+    VfsNode,
+)
 
 PATH_SEPARATOR = "/"
 ROOT_PATH = "/"
@@ -16,6 +21,8 @@ LS_FLAG_ALL = "a"
 LS_FLAG_LONG = "l"
 LS_FLAG_HUMAN = "h"
 LS_FLAGS_ALLOWED = (LS_FLAG_ALL, LS_FLAG_LONG, LS_FLAG_HUMAN)
+CHMOD_MIN_LEN = 3
+CHMOD_MAX_LEN = 4
 
 
 def _format_size(size: int) -> str:
@@ -87,10 +94,7 @@ def _parse_ls_args(args: list[str]) -> tuple[set[str], list[str]]:
     return flags, paths
 
 
-def _format_ls_line(
-    node: VfsNode,
-    flags: set[str],
-) -> str:
+def _format_ls_line(node: VfsNode, flags: set[str]) -> str:
     """Формирует строку вывода ls по флагам.
 
     Args:
@@ -152,6 +156,35 @@ def resolve_path(current: str, target: str) -> str:
             continue
         parts.append(part)
     return PATH_SEPARATOR + PATH_SEPARATOR.join(parts)
+
+
+def _parent_path(path: str) -> str:
+    """Возвращает путь к родительскому каталогу.
+
+    Args:
+        path: абсолютный путь.
+
+    Returns:
+        Путь родителя или корень, если path уже корень.
+    """
+    if path == ROOT_PATH:
+        return ROOT_PATH
+    parts = path.rstrip(PATH_SEPARATOR).split(PATH_SEPARATOR)
+    parent = PATH_SEPARATOR.join(parts[:-1])
+    return parent or ROOT_PATH
+
+
+def _basename(path: str) -> str:
+    """Возвращает последний компонент пути.
+
+    Args:
+        path: абсолютный путь.
+
+    Returns:
+        Имя узла или пустая строка для корня.
+    """
+    parts = [p for p in path.split(PATH_SEPARATOR) if p]
+    return parts[-1] if parts else ""
 
 
 def cmd_ls(vfs: Vfs, cwd: str, args: list[str]) -> list[str]:
@@ -314,6 +347,81 @@ def cmd_tree(vfs: Vfs, cwd: str, args: list[str]) -> list[str]:
     result = [display]
     result.extend(_walk(node, ""))
     return result
+
+
+def cmd_mkdir(vfs: Vfs, cwd: str, args: list[str]) -> list[str]:
+    """Создаёт каталог в VFS.
+
+    Args:
+        vfs: виртуальная файловая система.
+        cwd: текущий каталог.
+        args: аргументы команды.
+
+    Returns:
+        Пустой список при успехе или сообщение об ошибке.
+    """
+    if not args:
+        return ["mkdir: укажите имя каталога"]
+
+    path = resolve_path(cwd, args[0])
+    if path == ROOT_PATH:
+        return ["mkdir: корневой каталог уже существует"]
+    if vfs.find(path) is not None:
+        return [f"mkdir: уже существует: {args[0]}"]
+
+    parent = _parent_path(path)
+    parent_node = vfs.find(parent)
+    if parent_node is None or not parent_node.is_dir:
+        return [f"mkdir: нет такого каталога: {parent}"]
+
+    name = _basename(path)
+    node = VfsNode(name, NODE_TYPE_DIR, mode="755")
+    try:
+        parent_node.children[name] = node
+    except VfsError as error:
+        return [f"mkdir: {error}"]
+    return []
+
+
+def _is_valid_mode(mode: str) -> bool:
+    """Проверяет, что строка прав корректна.
+
+    Args:
+        mode: строка прав, например '644', '755', '1777'.
+
+    Returns:
+        True, если строка состоит только из цифр и длины 3 или 4.
+    """
+    if not mode.isdigit():
+        return False
+    return CHMOD_MIN_LEN <= len(mode) <= CHMOD_MAX_LEN
+
+
+def cmd_chmod(vfs: Vfs, cwd: str, args: list[str]) -> list[str]:
+    """Меняет права доступа узла VFS.
+
+    Args:
+        vfs: виртуальная файловая система.
+        cwd: текущий каталог.
+        args: аргументы команды.
+
+    Returns:
+        Пустой список при успехе или сообщение об ошибке.
+    """
+    if len(args) < 2:
+        return ["chmod: укажите права и путь"]
+
+    mode, target = args[0], args[1]
+    if not _is_valid_mode(mode):
+        return [f"chmod: неверный формат прав: {mode}"]
+
+    path = resolve_path(cwd, target)
+    node = vfs.find(path)
+    if node is None:
+        return [f"chmod: путь не найден: {target}"]
+
+    node.mode = mode
+    return []
 
 
 CommandResult = list[str] | tuple[str, list[str]]

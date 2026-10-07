@@ -1,20 +1,26 @@
-# Стартовый скрипт для тестирования всех команд Этапа 4.
+# Стартовый скрипт для тестирования всех команд Этапа 5.
 
 ls
-ls /
-ls /home
+cd /home
+ls
+
+mkdir /home/user/newdir
 ls /home/user
 
-cd /home/user
-ls
+mkdir /home/user/newdir
+mkdir /missing/newdir
 
-wc /home/user/readme.txt
-uniq /home/user/readme.txt
+chmod 600 /home/user/readme.txt
+ls -l /home/user
 
-cd /home/user/docs/work
-ls
+chmod 999 /home/user/readme.txt
+chmod abc /home/user/readme.txt
+chmod 644 /missing.txt
+
+mkdir
+chmod
+chmod 644
+
 tree /home/user
-tree /
-
 cd /
 ls

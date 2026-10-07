@@ -2,7 +2,9 @@
 
 from src.commands import (
     cmd_cd,
+    cmd_chmod,
     cmd_ls,
+    cmd_mkdir,
     cmd_tree,
     cmd_uniq,
     cmd_wc,
@@ -362,3 +364,130 @@ class TestTree:
         vfs = _make_vfs()
         lines = cmd_tree(vfs, "/home", ["user"])
         assert lines[0] == "/home/user"
+
+
+class TestMkdir:
+    """Тесты команды mkdir."""
+
+    def test_mkdir_in_root(self) -> None:
+        """mkdir /newdir создаёт каталог в корне."""
+        vfs = _make_vfs()
+        lines = cmd_mkdir(vfs, "/", ["/newdir"])
+        assert lines == []
+        node = vfs.find("/newdir")
+        assert node is not None
+        assert node.is_dir
+
+    def test_mkdir_relative(self) -> None:
+        """mkdir newdir в /home создаёт /home/newdir."""
+        vfs = _make_vfs()
+        lines = cmd_mkdir(vfs, "/home", ["newdir"])
+        assert lines == []
+        assert vfs.find("/home/newdir") is not None
+
+    def test_mkdir_existing(self) -> None:
+        """mkdir существующего каталога даёт ошибку."""
+        vfs = _make_vfs()
+        lines = cmd_mkdir(vfs, "/", ["/home"])
+        assert "уже существует" in lines[0]
+
+    def test_mkdir_missing_parent(self) -> None:
+        """mkdir в несуществующем родителе даёт ошибку."""
+        vfs = _make_vfs()
+        lines = cmd_mkdir(vfs, "/", ["/missing/sub"])
+        assert "нет такого каталога" in lines[0]
+
+    def test_mkdir_without_args(self) -> None:
+        """mkdir без аргументов — сообщение."""
+        vfs = _make_vfs()
+        lines = cmd_mkdir(vfs, "/", [])
+        assert "укажите" in lines[0]
+
+    def test_mkdir_root_fails(self) -> None:
+        """mkdir / не создаёт корень."""
+        vfs = _make_vfs()
+        lines = cmd_mkdir(vfs, "/", ["/"])
+        assert "корневой" in lines[0]
+
+    def test_mkdir_deep(self) -> None:
+        """mkdir по глубокому пути."""
+        vfs = _make_vfs()
+        lines = cmd_mkdir(vfs, "/", ["/home/user/projects"])
+        assert lines == []
+        assert vfs.find("/home/user/projects") is not None
+
+
+class TestChmod:
+    """Тесты команды chmod."""
+
+    def test_chmod_file(self) -> None:
+        """chmod 600 файла меняет mode."""
+        vfs = _make_vfs()
+        lines = cmd_chmod(vfs, "/", ["600", "/home/user/readme.txt"])
+        assert lines == []
+        node = vfs.find("/home/user/readme.txt")
+        assert node is not None
+        assert node.mode == "600"
+
+    def test_chmod_dir(self) -> None:
+        """chmod 700 каталога меняет mode."""
+        vfs = _make_vfs()
+        lines = cmd_chmod(vfs, "/", ["700", "/home"])
+        assert lines == []
+        node = vfs.find("/home")
+        assert node is not None
+        assert node.mode == "700"
+
+    def test_chmod_relative(self) -> None:
+        """chmod с относительным путём."""
+        vfs = _make_vfs()
+        lines = cmd_chmod(vfs, "/home/user", ["640", "readme.txt"])
+        assert lines == []
+        node = vfs.find("/home/user/readme.txt")
+        assert node is not None
+        assert node.mode == "640"
+
+    def test_chmod_four_digits(self) -> None:
+        """chmod принимает 4-значные права."""
+        vfs = _make_vfs()
+        lines = cmd_chmod(vfs, "/", ["1777", "/tmp"])
+        assert lines == []
+        node = vfs.find("/tmp")
+        assert node is not None
+        assert node.mode == "1777"
+
+    def test_chmod_missing_path(self) -> None:
+        """chmod несуществующего пути."""
+        vfs = _make_vfs()
+        lines = cmd_chmod(vfs, "/", ["644", "/missing"])
+        assert "не найден" in lines[0]
+
+    def test_chmod_invalid_mode(self) -> None:
+        """chmod с неправильными правами."""
+        vfs = _make_vfs()
+        lines = cmd_chmod(vfs, "/", ["abc", "/home"])
+        assert "неверный формат" in lines[0]
+
+    def test_chmod_too_short(self) -> None:
+        """chmod со слишком короткими правами."""
+        vfs = _make_vfs()
+        lines = cmd_chmod(vfs, "/", ["64", "/home"])
+        assert "неверный формат" in lines[0]
+
+    def test_chmod_too_long(self) -> None:
+        """chmod со слишком длинными правами."""
+        vfs = _make_vfs()
+        lines = cmd_chmod(vfs, "/", ["17777", "/home"])
+        assert "неверный формат" in lines[0]
+
+    def test_chmod_without_args(self) -> None:
+        """chmod без аргументов — сообщение."""
+        vfs = _make_vfs()
+        lines = cmd_chmod(vfs, "/", [])
+        assert "укажите" in lines[0]
+
+    def test_chmod_only_mode(self) -> None:
+        """chmod только с правами — сообщение."""
+        vfs = _make_vfs()
+        lines = cmd_chmod(vfs, "/", ["644"])
+        assert "укажите" in lines[0]

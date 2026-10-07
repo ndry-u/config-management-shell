@@ -15,7 +15,7 @@ Python + Tkinter. Работает с виртуальной файловой с
 - [x] Этап 2. Конфигурация
 - [x] Этап 3. VFS
 - [x] Этап 4. Основные команды (`uniq`, `tree`, `wc`)
-- [ ] Этап 5. Дополнительные команды (`mkdir`, `chmod`)
+- [x] Этап 5. Дополнительные команды (`mkdir`, `chmod`)
 
 ## Функции и настройки
 
@@ -36,7 +36,8 @@ Python + Tkinter. Работает с виртуальной файловой с
 - Отладочный вывод параметров при запуске.
 - Стартовый скрипт: команды выполняются последовательно,
   ошибочные строки пропускаются, ввод и вывод отображаются в окне.
-- Скрипты реальной ОС для тестирования: `scripts/demo.sh`, `scripts/demo.bat`.
+- Скрипты реальной ОС для тестирования:
+  `scripts/demo.sh`, `scripts/demo.bat`.
 
 ### Этап 3 (реализовано)
 
@@ -48,20 +49,36 @@ Python + Tkinter. Работает с виртуальной файловой с
 - Обработка ошибок загрузки: файл не найден, пустой файл,
   отсутствуют колонки, неверный тип узла, повреждённый base64.
 - Промежуточные каталоги создаются автоматически.
-- Тестовые наборы VFS: `data/vfs_minimal.csv`, `data/vfs_sample.csv`,
-  `data/vfs_deep.csv`.
+- Тестовые наборы VFS:
+  `data/vfs_minimal.csv`, `data/vfs_sample.csv`, `data/vfs_deep.csv`,
+  `data/vfs_dupes.csv`.
 
 ### Этап 4 (реализовано)
 
-- Команда `ls` — список файлов и каталогов с правами и владельцем.
+- Команда `ls` — список файлов и каталогов с поддержкой флагов:
+  - `-a` — показывать скрытые файлы (начинающиеся с `.`);
+  - `-l` — длинный формат (права, владелец, размер, имя);
+  - `-h` — человекочитаемый размер (вместе с `-l`);
+  - флаги комбинируются: `ls -la`, `ls -lh`, `ls -lah`.
 - Команда `cd` — смена текущего каталога, поддерживает `..`, `.`,
   абсолютные и относительные пути.
 - Команда `uniq` — удаление повторяющихся строк из файла.
 - Команда `wc` — подсчёт строк, слов и символов.
 - Команда `tree` — рекурсивное дерево каталогов.
 - Приглашение показывает текущий путь: `my> /home/user$ `.
-- Если VFS не загружена, команды, работающие с ней, выводят сообщение
-  `Команда требует загруженной VFS`.
+
+### Этап 5 (реализовано)
+
+- Команда `mkdir` — создание каталога в VFS (в памяти).
+- Команда `chmod` — смена прав доступа файла или каталога в VFS.
+- Поддержка относительных и абсолютных путей.
+- Проверка формата прав (3 или 4 цифры).
+- Обработка ошибок:
+  - каталог уже существует;
+  - нет родительского каталога;
+  - неверный формат прав;
+  - путь не найден;
+  - недостаточно аргументов.
 
 ## Сборка и запуск
 
@@ -92,7 +109,7 @@ python -m pytest tests/ -v
 
 ```bash
 python -m flake8 --max-line-length=80 src/ tests/
-python -m pylint --rcfile=.pylintrc src/ tests/
+python -m pylint --rcfile=.pylintrc src/ tests/ --disable=all --enable=C0114,C0115,R0913,R0914,R0915,C0103,C0301,R0912
 ```
 
 ## Примеры использования
@@ -113,39 +130,97 @@ VFS загружена: vfs_sample
 Эмулятор запущен. Введите 'exit' для выхода.
 ```
 
-### Работа с командами
+### ls с флагами
 
 ```
 my> /$ ls
-755     root home/
-1777     root tmp/
+home/
+tmp/
 
-my> /$ ls /home/user
-644     user notes.txt
-644     user readme.txt
+my> /$ ls -l
+755     root      0 home/
+1777     root      0 tmp/
 
+my> /$ ls -lah /home/user
+644     user    11 B data.bin
+644     user    38 B dupes.txt
+644     user    17 B notes.txt
+644     user    11 B readme.txt
+```
+
+### cd и работа с путями
+
+```
 my> /$ cd /home/user
-my> /home/user$ wc readme.txt
-   1    2     11 readme.txt
-
-my> /home/user$ uniq readme.txt
-Привет, мир
-
-my> /home/user$ tree /home
-/home
-└── user/
-    ├── notes.txt
-    └── readme.txt
-
 my> /home/user$ cd ..
-my> /home$ cd /
+my> /home$ cd
+my> /$
+```
+
+### wc и uniq
+
+```
+my> /$ wc /home/user/readme.txt
+   1    2   11 /home/user/readme.txt
+
+my> /$ uniq /home/user/dupes.txt
+apple
+banana
+cherry
+date
+```
+
+### tree
+
+```
 my> /$ tree
 /
 ├── home/
 │   └── user/
+│       ├── data.bin
+│       ├── dupes.txt
 │       ├── notes.txt
 │       └── readme.txt
 └── tmp/
+    └── log.txt
+```
+
+### mkdir
+
+```
+my> /$ mkdir /home/user/test
+my> /$ ls /home/user
+644     user data.bin
+644     user dupes.txt
+644     user notes.txt
+644     user readme.txt
+755     user test/
+
+my> /$ mkdir /home/user/test
+mkdir: уже существует: /home/user/test
+
+my> /$ mkdir /missing/sub
+mkdir: нет такого каталога: /
+```
+
+### chmod
+
+```
+my> /$ chmod 600 /home/user/readme.txt
+my> /$ ls -l /home/user
+600     user    11 readme.txt
+644     user    38 dupes.txt
+...
+
+my> /$ chmod 1777 /home/user/newdir
+my> /$ ls -l /home/user
+1777     user    0 newdir/
+
+my> /$ chmod abc /home/user/readme.txt
+chmod: неверный формат прав: abc
+
+my> /$ chmod 644 /missing.txt
+chmod: путь не найден: /missing.txt
 ```
 
 ### Обработка ошибок
@@ -174,11 +249,20 @@ abcd: команда не найдена
 
 ```
 ls
-ls /home/user
+ls -l
 cd /home/user
 wc readme.txt
+uniq /tmp/log.txt
+mkdir /home/user/test
+chmod 600 /home/user/readme.txt
 tree
 ```
 
 Строки, начинающиеся с `#`, — комментарии; они пропускаются.
 Ошибочные строки также пропускаются, выполнение не прерывается.
+
+## Важное замечание
+
+VFS модифицируется **только в памяти**. После выхода из эмулятора
+все изменения (`mkdir`, `chmod`) теряются. Физический CSV-файл
+не изменяется.

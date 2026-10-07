@@ -13,7 +13,9 @@ from tkinter import ttk
 
 from src.commands import (
     cmd_cd,
+    cmd_chmod,
     cmd_ls,
+    cmd_mkdir,
     cmd_tree,
     cmd_uniq,
     cmd_wc,
@@ -156,6 +158,8 @@ class ShellEmulator:
             "uniq": cmd_uniq,
             "wc": cmd_wc,
             "tree": cmd_tree,
+            "mkdir": cmd_mkdir,
+            "chmod": cmd_chmod,
         }
         return handlers.get(command)
 
